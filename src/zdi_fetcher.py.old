@@ -1,0 +1,85 @@
+import os
+import json
+import argparse
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+def parse_rss_feed(file_path):
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        namespace = {'dc': 'http://purl.org/dc/elements/1.1/'}
+        advisories = []
+
+        for item in root.findall('.//item'):
+            title = item.find('title').text
+            link = item.find('link').text
+            cve_id = item.find('dc:identifier', namespace).text if item.find('dc:identifier', namespace) else None
+            if cve_id:
+                advisories.append({
+                    "title": title,
+                    "cve_id": cve_id,
+                    "link": link
+                })
+        
+        return advisories
+    except Exception as e:
+        print(f"Error parsing RSS feed {file_path}: {e}")
+        return []
+
+def fetch_cve_from_zdi(cve_id, rss_feeds_dir):
+    advisories = []
+    rss_feeds_dir = Path(rss_feeds_dir)
+
+    for rss_file in rss_feeds_dir.glob("*.rss"):
+        advisories_in_file = parse_rss_feed(rss_file)
+        for advisory in advisories_in_file:
+            if advisory['cve_id'] == cve_id:
+                advisories.append(advisory)
+    
+    return advisories
+
+def fetch_multiple_cves_from_zdi(cve_ids, rss_feeds_dir):
+    results = {}
+    for cve_id in cve_ids:
+        cve_id = cve_id.strip()
+        advisories = fetch_cve_from_zdi(cve_id, rss_feeds_dir)
+        if advisories:
+            results[cve_id] = advisories
+        else:
+            results[cve_id] = "CVE not found in ZDI advisories."
+    return results
+
+def read_cve_list(file_path):
+    with open(file_path, 'r') as f:
+        return [line.strip() for line in f]
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fetch CVE information from ZDI RSS Feeds")
+    parser.add_argument('--rss-path', '-rp', type=str, required=True, help='Path to the directory containing ZDI RSS feeds')
+    parser.add_argument('--cve', '-c', type=str, help='Single CVE ID to fetch')
+    parser.add_argument('--json-file', '-jf', type=str, help='Path to a JSON file containing a list of CVE IDs')
+    parser.add_argument('--list-file', '-lf', type=str, help='Path to a text file with a list of CVE IDs (one per line)')
+
+    args = parser.parse_args()
+
+    rss_feeds_dir = args.rss_path
+
+    if args.cve:
+        result = fetch_cve_from_zdi(args.cve, rss_feeds_dir)
+        if result:
+            print(f"CVE {args.cve} found in ZDI advisories:")
+            print(json.dumps(result, indent=4))
+        else:
+            print(f"CVE {args.cve} not found in ZDI advisories.")
+    elif args.json_file:
+        with open(args.json_file, 'r') as f:
+            cve_ids = json.load(f)
+        results = fetch_multiple_cves_from_zdi(cve_ids, rss_feeds_dir)
+        print(json.dumps(results, indent=4))
+    elif args.list_file:
+        cve_ids = read_cve_list(args.list_file)
+        results = fetch_multiple_cves_from_zdi(cve_ids, rss_feeds_dir)
+        print(json.dumps(results, indent=4))
+    else:
+        print("Please provide a single CVE ID, a JSON file, or a list file with CVE IDs.")
