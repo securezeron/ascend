@@ -14,21 +14,42 @@ Ascend is a comprehensive vulnerability intelligence and scoring engine designed
   - **InTheWild**: Real-world exploit detections
 
 - **Risk Calculation & Prioritization**:  
-  Leverages multiple factors like exploitability, impact scores, CWE and CPE presence, and advisories to produce a tailored “Ascend Score.” This score helps determine which CVEs demand immediate attention.
+  Leverages multiple factors such as exploitability, impact scores, CWE and CPE presence, and advisories to produce a tailored “Ascend Score.” This helps you identify which CVEs should be addressed first.
 
 - **Modular & Extensible**:  
-  Built with a modular architecture, Ascend’s underlying fetchers and scoring functions can be easily extended with new data sources or scoring methodologies.
+  Easily extend Ascend’s data sources and scoring logic.
 
 - **Configurable & Scalable**:  
-  Supports parallel data fetching for large CVE sets and configurable sorting options (ascending/descending) for result prioritization.
+  Utilize multiple threads to fetch NVD data for large CVE sets, and sort results as needed.
 
 ## Getting Started
 
 ### Prerequisites
 
 - **Python**: 3.7+
-- Ensure that all referenced `src/*_fetcher.py` modules are available and correctly implemented.
-- Data directories and files (e.g., `cisa_kev/known_exploited_vulnerabilities.json`, `zdi_rss_feeds`, `inthewild` directory) should be structured as expected by the script.
+- Ensure that all referenced `src/*_fetcher.py` modules are present and correctly implemented.
+
+### Creating the Base Directory
+
+Use the `src/*_updater.py` scripts provided to create and populate your `base_dir` with the necessary data:
+
+```bash
+python3 cisa_kev_updater.py --base_dir /path/to/base_dir
+python3 zdi_updater.py --base_dir /path/to/base_dir
+python3 inthewild_updater.py --base_dir /path/to/base_dir
+```
+
+After running these updater scripts, your `base_dir` might look like this:
+
+```bash
+/path/to/base_dir/
+├─ cisa_kev/
+│  └─ known_exploited_vulnerabilities.json
+├─ zdi_rss_feeds/
+│  └─ ... (ZDI feed files)
+└─ inthewild/
+   └─ ... (InTheWild data files)
+```
 
 ### Installation
 
@@ -38,63 +59,68 @@ Ascend is a comprehensive vulnerability intelligence and scoring engine designed
    cd Ascend
    ```
 
-2. **Install dependencies** (if any external packages are required):
+2. **Install dependencies** (if required):
    ```bash
    pip install -r requirements.txt
    ```
 
 3. **Prepare data sources**:
-   Place CISA KEV JSON, ZDI RSS feeds, and InTheWild data into the specified `base_dir` directory.
+   Ensure `base_dir` is properly structured as noted above.
 
-### Usage
+### Usage (JSON Input and Output Only)
 
+Ascend accepts CVE input strictly from a JSON file. This JSON file should contain an array of CVE strings. For example:
+
+```json
+["CVE-2023-1234", "CVE-2023-5678"]
+```
+
+Run Ascend with:
 ```bash
-python3 cve_processing.py \
+python3 main.py \
     --base_dir /path/to/base_dir \
-    --cve_list "CVE-2023-1234,CVE-2023-5678" \
+    --cve_file cves.json \
     --nvd_threads 10 \
     --outfile results.json
 ```
 
-**Common Arguments**:
+**Required Arguments**:
 
 - `--base_dir <path>`: **(Required)** The directory containing data and auxiliary files.
-- `--cve_list <CVE,...>`: A comma-separated list of CVEs to analyze.
-- `--cve_file <file_path>`: Load CVEs from a JSON or text file.
-- `--cve_dir <dir_path>`: Load CVEs from all compatible files in a specified directory.
-- `--sort_order <ascending|descending>`: Sort final results by score. Default is `descending`.
-- `--config <config_file>`: Load configuration from a JSON config file.
-- `--write_config <config_file>`: Write the current configuration to a file for future use.
+- `--cve_file <file_path>`: JSON file containing an array of CVE strings.
 - `--outfile <filename>`: Specify the output JSON file for results. Default: `results.json`.
 - `--nvd_threads <int>`: Number of threads to speed up NVD fetching. Required.
 
+**Optional Arguments**:
+
+- `--config <config_file>`: Load configuration (including CVEs) from a JSON config file.
+- `--write_config <config_file>`: Write the current configuration to a file for future use.
+- `--sort_order <ascending|descending>`: Sort final results by score. Default is `descending`.
+
 ### Examples
 
-- **Direct CVE Input**:
+- **From a CVE JSON File**:
   ```bash
   python3 main.py --base_dir ./data \
-                            --cve_list "CVE-2023-1234,CVE-2022-0987" \
-                            --nvd_threads 5
+                            --cve_file ./cves.json \
+                            --nvd_threads 10 \
+                            --outfile results.json
   ```
 
-- **From File**:
-  ```bash
-  python3 cve_processing.py --base_dir ./data \
-                            --cve_file ./cves.txt \
-                            --nvd_threads 10
+- **From a Config File**:
+  Create a `config.json`:
+  ```json
+  {
+    "base_dir": "./data",
+    "cves": ["CVE-2023-1234", "CVE-2022-0987"],
+    "sort_order": "descending"
+  }
   ```
-
-- **From Directory**:
+  Run:
   ```bash
-  python3 cve_processing.py --base_dir ./data \
-                            --cve_dir ./cve_inputs \
-                            --nvd_threads 10
-  ```
-
-- **From Config File**:
-  ```bash
-  python3 cve_processing.py --config ./config.json \
-                            --nvd_threads 10
+  python3 main.py --config ./config.json \
+                            --nvd_threads 10 \
+                            --outfile results.json
   ```
 
 ### Configuration Files
@@ -111,9 +137,9 @@ You can store and load configurations to streamline runs:
 
 Use `--write_config config.json` to generate this file from your current arguments.
 
-## Output
+## Output (JSON Only)
 
-Ascend produces a JSON output listing each CVE with comprehensive data:
+Ascend produces a JSON file containing a list of CVEs with their details:
 
 ```json
 [
@@ -138,7 +164,7 @@ Ascend produces a JSON output listing each CVE with comprehensive data:
 ]
 ```
 
-This structured output can be easily integrated into dashboards, pipelines, or reporting tools.
+You can then ingest this JSON output into dashboards, pipelines, or security tools.
 
 ## Contributing
 
@@ -155,3 +181,5 @@ Pull requests are welcome! For significant changes, please open an issue first t
 [MIT](LICENSE)
 
 ---
+
+Elevate your vulnerability management with Ascend—let actionable insights guide you to swift and effective remediation.
